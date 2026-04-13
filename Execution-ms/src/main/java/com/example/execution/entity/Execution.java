@@ -15,6 +15,7 @@ public class Execution {
     private int routerId;
     private int operationId;
     private String status;
+    private String txnId;
 
     // Getters & Setters
     public Long getId() { return id; }
@@ -27,4 +28,7 @@ public class Execution {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getTxnId() { return txnId; }
+    public void setTxnId(String txnId) { this.txnId = txnId; }
 }

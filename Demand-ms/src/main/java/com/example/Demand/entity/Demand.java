@@ -16,6 +16,15 @@ public class Demand {
     @Column(name = "operation_id", nullable = false)
     private int operationId;
 
+    @Column(name = "sfc_id")
+    private String sfcId;
+
+    @Column(name = "txn_id")
+    private String txnId;
+
+    @Column(name = "status")
+    private String status;
+
     // Getters & Setters
     public Long getId() {
         return id;
@@ -39,5 +48,29 @@ public class Demand {
 
     public void setOperationId(int operationId) {
         this.operationId = operationId;
+    }
+
+    public String getSfcId() {
+        return sfcId;
+    }
+
+    public void setSfcId(String sfcId) {
+        this.sfcId = sfcId;
+    }
+
+    public String getTxnId() {
+        return txnId;
+    }
+
+    public void setTxnId(String txnId) {
+        this.txnId = txnId;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }
