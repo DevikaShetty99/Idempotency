@@ -4,7 +4,9 @@ import com.example.execution.entity.Execution;
 import com.example.execution.entity.Idempotency;
 import com.example.execution.repository.ExecutionRepository;
 import com.example.execution.repository.IdempotencyRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -14,45 +16,67 @@ public class ExecutionServiceImpl implements ExecutionService {
 
     private final ExecutionRepository executionRepository;
     private final IdempotencyRepository idempotencyRepository;
+    private final ObjectMapper objectMapper;
 
     public ExecutionServiceImpl(ExecutionRepository executionRepository,
                                 IdempotencyRepository idempotencyRepository) {
         this.executionRepository = executionRepository;
         this.idempotencyRepository = idempotencyRepository;
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
     }
 
     @Override
+    @Transactional
     public Execution reserve(Execution execution) {
 
-        // 🔴 STEP 1: Check if txn already exists
+        // STEP 1: Check if txn already exists
         Optional<Idempotency> existing = idempotencyRepository.findByTxnId(execution.getTxnId());
 
         if (existing.isPresent()) {
-            System.out.println("Duplicate request detected - returning cached response");
-
-            // Return cached execution to indicate it was already processed
-            Execution cachedExecution = new Execution();
-            cachedExecution.setRouterId(execution.getRouterId());
-            cachedExecution.setOperationId(execution.getOperationId());
-            cachedExecution.setStatus("DUPLICATE"); // Mark as DUPLICATE so Demand can identify it
-            cachedExecution.setTxnId(execution.getTxnId());
-
-            return cachedExecution;
+            // Return the cached response from idempotency table
+            try {
+                String cachedResponse = existing.get().getResponse();
+                Execution cachedExecution = objectMapper.readValue(cachedResponse, Execution.class);
+                return cachedExecution;
+            } catch (Exception e) {
+                return new Execution();
+            }
         }
 
-        // 🟢 STEP 2: Process normally
-        execution.setStatus("RESERVED");
-
-        Execution saved = executionRepository.save(execution);
-
-        // 🟢 STEP 3: Save idempotency record
+        // STEP 2: Save idempotency record FIRST (claims this txnId)
         Idempotency idem = new Idempotency();
         idem.setTxnId(execution.getTxnId());
-        idem.setStatus("SUCCESS");
-        idem.setResponse(String.format("{\"id\":%d,\"routerId\":%d,\"operationId\":%d,\"status\":\"%s\",\"txnId\":\"%s\"}",
-            saved.getId(), saved.getRouterId(), saved.getOperationId(), saved.getStatus(), saved.getTxnId()));
+        idem.setStatus("PROCESSING");
+        idem.setResponse("");
         idem.setCreatedAt(LocalDateTime.now());
 
+        try {
+            idempotencyRepository.save(idem);
+        } catch (Exception e) {
+            // Another request claimed this txnId, return cached response
+            Optional<Idempotency> claimed = idempotencyRepository.findByTxnId(execution.getTxnId());
+            if (claimed.isPresent()) {
+                try {
+                    String cachedResponse = claimed.get().getResponse();
+                    Execution cachedExecution = objectMapper.readValue(cachedResponse, Execution.class);
+                    return cachedExecution;
+                } catch (Exception ex) {
+                    return new Execution();
+                }
+            }
+            return new Execution();
+        }
+
+        // STEP 3: Process execution (txnId now claimed)
+        execution.setStatus("RESERVED");
+        execution.setTimestamp(LocalDateTime.now());
+        Execution saved = executionRepository.save(execution);
+
+        // STEP 4: Update idempotency with final response
+        idem.setStatus("SUCCESS");
+        idem.setResponse(String.format("{\"id\":%d,\"routerId\":%d,\"operationId\":%d,\"sfcId\":\"%s\",\"timestamp\":\"%s\"}",
+            saved.getId(), saved.getRouterId(), saved.getOperationId(), saved.getSfcId(), saved.getTimestamp()));
         idempotencyRepository.save(idem);
 
         return saved;

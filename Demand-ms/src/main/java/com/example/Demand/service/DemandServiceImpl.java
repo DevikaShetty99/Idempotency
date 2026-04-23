@@ -37,30 +37,27 @@ public class DemandServiceImpl implements DemandService {
         request.setRouterId(sfc.getRouterId());
         request.setOperationId(sfc.getOperationId());
         request.setTxnId(txnId);
+        request.setSfcId(sfc.getSfcId());
 
         // 🟢 STEP 4: Call MS2 and get response
         try {
             String executionResponse = restTemplate.postForObject(url, request, String.class);
 
-            // 🟢 STEP 5: Update with txnId and status based on response
             saved.setTxnId(txnId);
 
-            if (executionResponse != null) {
-                // Check if it's a duplicate or new reservation by checking response
-                if (executionResponse.contains("\"status\":\"DUPLICATE\"")) {
-                    saved.setStatus("DUPLICATE");
-                } else {
-                    saved.setStatus("SUCCESS");
-                }
-            } else {
-                saved.setStatus("FAILED");
+            // Extract timestamp from response
+            if (executionResponse != null && executionResponse.contains("\"timestamp\":\"")) {
+                int start = executionResponse.indexOf("\"timestamp\":\"") + 13;
+                int end = executionResponse.indexOf("\"", start);
+                String timestampStr = executionResponse.substring(start, end);
+                saved.setTimestamp(java.time.LocalDateTime.parse(timestampStr));
             }
 
+            saved.setStatus("SUCCESS");
+
         } catch (Exception e) {
-            // Network error, timeout, or other failure
             saved.setTxnId(txnId);
             saved.setStatus("FAILED");
-            System.err.println("Failed to call Execution service: " + e.getMessage());
         }
 
         return repository.save(saved);
