@@ -1,0 +1,20 @@
+# Docker volumes
+postgres-data/
+temporal-data/
+
+# SQLite databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# IDE
+.idea/
+*.iml
+
+# Maven
+target/
+.mvn/
+
+# macOS
+.DS_Store
