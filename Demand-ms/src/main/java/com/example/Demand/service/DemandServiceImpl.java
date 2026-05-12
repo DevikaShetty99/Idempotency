@@ -1,10 +1,13 @@
 package com.example.Demand.service;
 
-import com.example.Demand.dto.ExecutionRequest;
 import com.example.Demand.entity.Demand;
 import com.example.Demand.repository.DemandRepository;
+import com.example.Demand.temporal.workflow.SFCWorkflow;
+import com.example.Demand.temporal.TemporalWorker;
+import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowOptions;
+import io.temporal.serviceclient.WorkflowServiceStubs;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,12 +16,16 @@ import java.security.NoSuchAlgorithmException;
 public class DemandServiceImpl implements DemandService {
 
     private final DemandRepository repository;
-    private final RestTemplate restTemplate;
+    private final WorkflowClient workflowClient;
 
-    // Constructor Injection (BEST PRACTICE)
-    public DemandServiceImpl(DemandRepository repository, RestTemplate restTemplate) {
+    public DemandServiceImpl(DemandRepository repository) {
         this.repository = repository;
-        this.restTemplate = restTemplate;
+        WorkflowServiceStubs service = WorkflowServiceStubs.newServiceStubs(
+                io.temporal.serviceclient.WorkflowServiceStubsOptions.newBuilder()
+                        .setTarget("localhost:7234")
+                        .build()
+        );
+        this.workflowClient = WorkflowClient.newInstance(service);
     }
 
     @Override
@@ -30,18 +37,22 @@ public class DemandServiceImpl implements DemandService {
         // 🟢 STEP 2: Save in MS1 DB
         Demand saved = repository.save(sfc);
 
-        // 🟢 STEP 3: Prepare request for MS2
-        String url = "http://localhost:8081/api/execution/reserve";
+        // 🟢 STEP 3: Start Temporal workflow
+        WorkflowOptions options = WorkflowOptions.newBuilder()
+                .setTaskQueue(TemporalWorker.TASK_QUEUE)
+                .setWorkflowId("SFC-" + txnId)
+                .build();
 
-        ExecutionRequest request = new ExecutionRequest();
-        request.setRouterId(sfc.getRouterId());
-        request.setOperationId(sfc.getOperationId());
-        request.setTxnId(txnId);
-        request.setSfcId(sfc.getSfcId());
+        SFCWorkflow workflow = workflowClient.newWorkflowStub(SFCWorkflow.class, options);
 
-        // 🟢 STEP 4: Call MS2 and get response
+        // 🟢 STEP 4: Execute workflow (Temporal handles retries)
         try {
-            String executionResponse = restTemplate.postForObject(url, request, String.class);
+            String executionResponse = workflow.createSFC(
+                    sfc.getRouterId(),
+                    sfc.getOperationId(),
+                    sfc.getSfcId(),
+                    txnId
+            );
 
             saved.setTxnId(txnId);
 

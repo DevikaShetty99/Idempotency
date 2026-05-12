@@ -6,7 +6,6 @@ import com.example.execution.repository.ExecutionRepository;
 import com.example.execution.repository.IdempotencyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -27,13 +26,22 @@ public class ExecutionServiceImpl implements ExecutionService {
     }
 
     @Override
-    @Transactional
     public Execution reserve(Execution execution) {
 
         // STEP 1: Check if txn already exists
         Optional<Idempotency> existing = idempotencyRepository.findByTxnId(execution.getTxnId());
 
         if (existing.isPresent()) {
+            // If still processing, wait and retry
+            if ("PROCESSING".equals(existing.get().getStatus())) {
+                try {
+                    Thread.sleep(1000); // Wait 1 second
+                    existing = idempotencyRepository.findByTxnId(execution.getTxnId());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+
             // Return the cached response from idempotency table
             try {
                 String cachedResponse = existing.get().getResponse();
@@ -53,6 +61,10 @@ public class ExecutionServiceImpl implements ExecutionService {
 
         try {
             idempotencyRepository.save(idem);
+
+            // Add delay to demonstrate PROCESSING state
+            Thread.sleep(5000); // 5 seconds delay
+
         } catch (Exception e) {
             // Another request claimed this txnId, return cached response
             Optional<Idempotency> claimed = idempotencyRepository.findByTxnId(execution.getTxnId());
