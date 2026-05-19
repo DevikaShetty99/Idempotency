@@ -1,5 +1,7 @@
 package com.example.Demand.temporal.workflow;
 
+import com.example.Demand.dto.WorkflowInput;
+import com.example.Demand.dto.WorkflowOutput;
 import com.example.Demand.temporal.activity.ExecutionActivity;
 import io.temporal.activity.ActivityOptions;
 import io.temporal.common.RetryOptions;
@@ -23,8 +25,8 @@ public class SFCWorkflowImpl implements SFCWorkflow {
     public SFCWorkflowImpl() {
         // Configure activity options with retry policy
         ActivityOptions activityOptions = ActivityOptions.newBuilder()
-                .setScheduleToStartTimeout(Duration.ofSeconds(15))  // Max wait for worker to pick up
-                .setStartToCloseTimeout(Duration.ofSeconds(20))     // Max time for activity execution
+                .setScheduleToStartTimeout(Duration.ofMinutes(2))  // Wait up to 2 minutes for worker
+                .setStartToCloseTimeout(Duration.ofSeconds(30))    // Max time for activity execution
                 .setRetryOptions(RetryOptions.newBuilder()
                         .setInitialInterval(Duration.ofSeconds(1))
                         .setMaximumInterval(Duration.ofSeconds(10))
@@ -37,10 +39,10 @@ public class SFCWorkflowImpl implements SFCWorkflow {
     }
 
     @Override
-    public String createSFC(int routerId, int operationId, String sfcId, String txnId) {
+    public WorkflowOutput createSFC(WorkflowInput input) {
         // Call the activity - Temporal routes this to Execution-ms worker
         // Temporal handles retries, idempotency, and failure recovery
-        String executionResponse = executionActivity.reserveExecution(routerId, operationId, sfcId, txnId);
-        return executionResponse;
+        WorkflowOutput output = executionActivity.reserveExecution(input);
+        return output;
     }
 }
