@@ -1,5 +1,7 @@
 package com.example.Demand.service;
 
+import com.example.Demand.dto.WorkflowInput;
+import com.example.Demand.dto.WorkflowOutput;
 import com.example.Demand.entity.Demand;
 import com.example.Demand.repository.DemandRepository;
 import com.example.Demand.temporal.workflow.SFCWorkflow;
@@ -11,6 +13,8 @@ import org.springframework.stereotype.Service;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 public class DemandServiceImpl implements DemandService {
@@ -40,30 +44,25 @@ public class DemandServiceImpl implements DemandService {
         // 🟢 STEP 3: Start Temporal workflow
         WorkflowOptions options = WorkflowOptions.newBuilder()
                 .setTaskQueue(TemporalWorker.TASK_QUEUE)
-                .setWorkflowId("SFC-" + txnId)
+                .setWorkflowId("SFC-" + txnId + "-" + UUID.randomUUID())
                 .build();
 
         SFCWorkflow workflow = workflowClient.newWorkflowStub(SFCWorkflow.class, options);
 
-        // 🟢 STEP 4: Execute workflow (Temporal handles retries)
+        // 🟢 STEP 4: Prepare input DTO
+        WorkflowInput input = new WorkflowInput(
+                sfc.getRouterId(),
+                sfc.getOperationId(),
+                sfc.getSfcId(),
+                txnId
+        );
+
+        // 🟢 STEP 5: Execute workflow (Temporal handles retries)
         try {
-            String executionResponse = workflow.createSFC(
-                    sfc.getRouterId(),
-                    sfc.getOperationId(),
-                    sfc.getSfcId(),
-                    txnId
-            );
+            WorkflowOutput output = workflow.createSFC(input);
 
             saved.setTxnId(txnId);
-
-            // Extract timestamp from response
-            if (executionResponse != null && executionResponse.contains("\"timestamp\":\"")) {
-                int start = executionResponse.indexOf("\"timestamp\":\"") + 13;
-                int end = executionResponse.indexOf("\"", start);
-                String timestampStr = executionResponse.substring(start, end);
-                saved.setTimestamp(java.time.LocalDateTime.parse(timestampStr));
-            }
-
+            saved.setTimestamp(LocalDateTime.parse(output.getTimestamp()));
             saved.setStatus("SUCCESS");
 
         } catch (Exception e) {

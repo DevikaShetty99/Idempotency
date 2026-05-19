@@ -1,5 +1,7 @@
 package com.example.Demand.temporal.activity;
 
+import com.example.Demand.dto.WorkflowInput;
+import com.example.Demand.dto.WorkflowOutput;
 import io.temporal.activity.ActivityInterface;
 import io.temporal.activity.ActivityMethod;
 
@@ -7,5 +9,5 @@ import io.temporal.activity.ActivityMethod;
 public interface ExecutionActivity {
 
     @ActivityMethod
-    String reserveExecution(int routerId, int operationId, String sfcId, String txnId);
+    WorkflowOutput reserveExecution(WorkflowInput input);
 }
