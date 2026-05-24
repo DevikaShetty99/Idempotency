@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -61,9 +62,7 @@ public class ExecutionServiceImpl implements ExecutionService {
 
         try {
             idempotencyRepository.save(idem);
-
-            // Add delay to demonstrate PROCESSING state
-            Thread.sleep(5000); // 5 seconds delay
+            // No delay - fast execution
 
         } catch (Exception e) {
             // Another request claimed this txnId, return cached response
@@ -92,5 +91,15 @@ public class ExecutionServiceImpl implements ExecutionService {
         idempotencyRepository.save(idem);
 
         return saved;
+    }
+
+    @Override
+    public int updateStatusBySfcId(String sfcId, String newStatus) {
+        return executionRepository.updateStatusBySfcId(sfcId, newStatus);
+    }
+
+    @Override
+    public List<Execution> findBySfcId(String sfcId) {
+        return executionRepository.findBySfcId(sfcId);
     }
 }

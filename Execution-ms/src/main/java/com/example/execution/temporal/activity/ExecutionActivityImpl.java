@@ -6,6 +6,8 @@ import com.example.execution.entity.Execution;
 import com.example.execution.service.ExecutionService;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+
 @Component
 public class ExecutionActivityImpl implements ExecutionActivity {
 
@@ -34,8 +36,16 @@ public class ExecutionActivityImpl implements ExecutionActivity {
         output.setOperationId(result.getOperationId());
         output.setSfcId(result.getSfcId());
         output.setTxnId(result.getTxnId());
-        output.setTimestamp(result.getTimestamp().toString());
-        output.setStatus(result.getStatus());
+
+        // Handle null timestamp gracefully
+        output.setTimestamp(result.getTimestamp() != null
+            ? result.getTimestamp().toString()
+            : LocalDateTime.now().toString());
+
+        // Handle null status gracefully
+        output.setStatus(result.getStatus() != null
+            ? result.getStatus()
+            : "RESERVED");
 
         return output;
     }

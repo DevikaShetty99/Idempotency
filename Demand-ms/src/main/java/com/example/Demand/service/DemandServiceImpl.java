@@ -57,7 +57,7 @@ public class DemandServiceImpl implements DemandService {
                 txnId
         );
 
-        // 🟢 STEP 5: Execute workflow (Temporal handles retries)
+        // 🟢 STEP 5: Execute workflow synchronously (wait for result)
         try {
             WorkflowOutput output = workflow.createSFC(input);
 

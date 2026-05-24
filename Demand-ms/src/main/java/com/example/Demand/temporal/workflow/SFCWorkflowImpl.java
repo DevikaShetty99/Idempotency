@@ -25,13 +25,13 @@ public class SFCWorkflowImpl implements SFCWorkflow {
     public SFCWorkflowImpl() {
         // Configure activity options with retry policy
         ActivityOptions activityOptions = ActivityOptions.newBuilder()
-                .setScheduleToStartTimeout(Duration.ofMinutes(2))  // Wait up to 2 minutes for worker
-                .setStartToCloseTimeout(Duration.ofSeconds(30))    // Max time for activity execution
+                .setScheduleToStartTimeout(Duration.ofMinutes(10))  // Wait up to 10 minutes for worker
+                .setStartToCloseTimeout(Duration.ofMinutes(5))      // Max 5 minutes for activity execution
                 .setRetryOptions(RetryOptions.newBuilder()
                         .setInitialInterval(Duration.ofSeconds(1))
-                        .setMaximumInterval(Duration.ofSeconds(10))
+                        .setMaximumInterval(Duration.ofSeconds(30))
                         .setBackoffCoefficient(2.0)
-                        .setMaximumAttempts(5)  // Max 5 attempts
+                        .setMaximumAttempts(20)  // Max 20 attempts
                         .build())
                 .build();
 
