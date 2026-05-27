@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -75,8 +76,14 @@ public class DemandServiceImpl implements DemandService {
 
     private String generateTxnId(String sfcId) {
         try {
+
+            long nowEpochSecond = Instant.now().getEpochSecond();
+            long interval = 5;
+            long roundedEpochSecond = nowEpochSecond  - (nowEpochSecond % interval);
+            String idempotencyKey=sfcId+"-"+roundedEpochSecond;
+
             MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] hash = md.digest(sfcId.getBytes());
+            byte[] hash = md.digest(idempotencyKey.getBytes());
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);

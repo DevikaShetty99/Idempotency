@@ -39,7 +39,9 @@ public class ExecutionController {
                 sfcId,
                 newStatus,
                 updatedCount,
-                updatedCount > 1 ? "WARNING: Multiple records updated due to duplicates!" : "OK"
+                updatedCount > 1
+                    ? String.format("WARNING: %d duplicate records updated!", updatedCount)
+                    : "OK - Single record updated"
         ));
     }
 

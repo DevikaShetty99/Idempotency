@@ -36,7 +36,7 @@ public class ExecutionServiceImpl implements ExecutionService {
             // If still processing, wait and retry
             if ("PROCESSING".equals(existing.get().getStatus())) {
                 try {
-                    Thread.sleep(1000); // Wait 1 second
+                    Thread.sleep(5000); // Wait 5 seconds
                     existing = idempotencyRepository.findByTxnId(execution.getTxnId());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -46,10 +46,13 @@ public class ExecutionServiceImpl implements ExecutionService {
             // Return the cached response from idempotency table
             try {
                 String cachedResponse = existing.get().getResponse();
+                if (cachedResponse == null || cachedResponse.isEmpty()) {
+                    throw new RuntimeException("Cached response is empty - request still processing");
+                }
                 Execution cachedExecution = objectMapper.readValue(cachedResponse, Execution.class);
                 return cachedExecution;
             } catch (Exception e) {
-                return new Execution();
+                throw new RuntimeException("Failed to deserialize cached response: " + e.getMessage(), e);
             }
         }
 
@@ -70,27 +73,40 @@ public class ExecutionServiceImpl implements ExecutionService {
             if (claimed.isPresent()) {
                 try {
                     String cachedResponse = claimed.get().getResponse();
+                    if (cachedResponse == null || cachedResponse.isEmpty()) {
+                        throw new RuntimeException("Cached response is empty - request still processing");
+                    }
                     Execution cachedExecution = objectMapper.readValue(cachedResponse, Execution.class);
                     return cachedExecution;
                 } catch (Exception ex) {
-                    return new Execution();
+                    throw new RuntimeException("Failed to deserialize cached response: " + ex.getMessage(), ex);
                 }
             }
-            return new Execution();
+            throw new RuntimeException("Failed to claim txnId and no cached response found");
         }
 
         // STEP 3: Process execution (txnId now claimed)
-        execution.setStatus("RESERVED");
-        execution.setTimestamp(LocalDateTime.now());
-        Execution saved = executionRepository.save(execution);
+        try {
+            execution.setStatus("RESERVED");
+            execution.setTimestamp(LocalDateTime.now());
+            Execution saved = executionRepository.save(execution);
 
-        // STEP 4: Update idempotency with final response
-        idem.setStatus("SUCCESS");
-        idem.setResponse(String.format("{\"id\":%d,\"routerId\":%d,\"operationId\":%d,\"sfcId\":\"%s\",\"timestamp\":\"%s\"}",
-            saved.getId(), saved.getRouterId(), saved.getOperationId(), saved.getSfcId(), saved.getTimestamp()));
-        idempotencyRepository.save(idem);
+            // STEP 4: Update idempotency with final response
+            idem.setStatus("SUCCESS");
+            idem.setResponse(String.format("{\"id\":%d,\"routerId\":%d,\"operationId\":%d,\"sfcId\":\"%s\",\"timestamp\":\"%s\"}",
+                saved.getId(), saved.getRouterId(), saved.getOperationId(), saved.getSfcId(), saved.getTimestamp()));
+            idempotencyRepository.save(idem);
 
-        return saved;
+            return saved;
+
+        } catch (Exception e) {
+            // Execution failed - update idempotency status to FAILED
+            idem.setStatus("FAILED");
+            idem.setResponse(String.format("{\"error\":\"%s\"}", e.getMessage()));
+            idempotencyRepository.save(idem);
+
+            throw new RuntimeException("Execution failed: " + e.getMessage(), e);
+        }
     }
 
     @Override
